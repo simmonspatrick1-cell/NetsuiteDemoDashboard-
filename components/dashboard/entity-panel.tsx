@@ -15,6 +15,7 @@ interface EntityPanelProps {
   onGenerate: (count: number) => Promise<void>;
   onPushToNetSuite: () => Promise<void>;
   onClearAll: () => Promise<void>;
+  onDataChange?: () => void;
 }
 
 const entityLabels: Record<EntityType, string> = {
@@ -31,6 +32,7 @@ export function EntityPanel({
   onGenerate,
   onPushToNetSuite,
   onClearAll,
+  onDataChange,
 }: EntityPanelProps) {
   const [count, setCount] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -134,7 +136,7 @@ export function EntityPanel({
           <CardTitle className="text-lg text-foreground">Records</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable entityType={entityType} data={data} />
+          <DataTable entityType={entityType} data={data} onDataChange={onDataChange} />
         </CardContent>
       </Card>
     </div>

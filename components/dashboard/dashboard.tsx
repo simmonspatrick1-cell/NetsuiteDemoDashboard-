@@ -119,6 +119,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
             onGenerate={(count) => handleGenerate(activeTab, count)}
             onPushToNetSuite={() => handlePushToNetSuite(activeTab)}
             onClearAll={() => handleClearAll(activeTab)}
+            onDataChange={() => mutate()}
           />
         )}
       </main>

@@ -74,8 +74,40 @@ export async function insertCustomer(customer: Omit<Customer, 'id' | 'created_at
 
 export async function insertServiceItem(item: Omit<ServiceItem, 'id' | 'created_at'>) {
   const result = await sql`
-    INSERT INTO service_items (item_name, item_type, description, rate, rate_type, prospect_id, netsuite_id, selected)
-    VALUES (${item.item_name}, ${item.item_type}, ${item.description}, ${item.rate}, ${item.rate_type}, ${item.prospect_id}, ${item.netsuite_id}, ${item.selected})
+    INSERT INTO service_items (
+      item_name, display_name, item_type, description,
+      unit_type, sales_price, purchase_price,
+      income_account, expense_account, tax_schedule,
+      prospect_id, netsuite_id, selected
+    )
+    VALUES (
+      ${item.item_name}, ${item.display_name}, ${item.item_type}, ${item.description},
+      ${item.unit_type}, ${item.sales_price}, ${item.purchase_price},
+      ${item.income_account}, ${item.expense_account}, ${item.tax_schedule},
+      ${item.prospect_id}, ${item.netsuite_id}, ${item.selected}
+    )
+    RETURNING *
+  `;
+  return result[0] as ServiceItem;
+}
+
+export async function updateServiceItem(id: number, updates: Partial<Omit<ServiceItem, 'id' | 'created_at'>>) {
+  const result = await sql`
+    UPDATE service_items
+    SET
+      item_name = COALESCE(${updates.item_name ?? null}, item_name),
+      display_name = COALESCE(${updates.display_name ?? null}, display_name),
+      item_type = COALESCE(${updates.item_type ?? null}, item_type),
+      description = COALESCE(${updates.description ?? null}, description),
+      unit_type = COALESCE(${updates.unit_type ?? null}, unit_type),
+      sales_price = COALESCE(${updates.sales_price ?? null}, sales_price),
+      purchase_price = COALESCE(${updates.purchase_price ?? null}, purchase_price),
+      income_account = COALESCE(${updates.income_account ?? null}, income_account),
+      expense_account = COALESCE(${updates.expense_account ?? null}, expense_account),
+      tax_schedule = COALESCE(${updates.tax_schedule ?? null}, tax_schedule),
+      netsuite_id = COALESCE(${updates.netsuite_id ?? null}, netsuite_id),
+      selected = COALESCE(${updates.selected ?? null}, selected)
+    WHERE id = ${id}
     RETURNING *
   `;
   return result[0] as ServiceItem;
@@ -97,6 +129,10 @@ export async function insertTask(task: Omit<Task, 'id' | 'created_at' | 'project
     RETURNING *
   `;
   return result[0] as Task;
+}
+
+export async function deleteServiceItem(id: number) {
+  await sql`DELETE FROM service_items WHERE id = ${id}`;
 }
 
 export async function deleteAllData() {

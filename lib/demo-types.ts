@@ -25,11 +25,16 @@ export interface Customer {
 
 export interface ServiceItem {
   id: number;
-  item_name: string;
-  item_type: string;
-  description: string | null;
-  rate: number;
-  rate_type: string;
+  item_name: string;           // NetSuite: Item Name/Number (itemid)
+  display_name: string | null; // NetSuite: Display Name
+  item_type: string;           // NetSuite: Item Type (Service, Non-inventory, etc.)
+  description: string | null;  // NetSuite: Description
+  unit_type: string | null;    // NetSuite: Unit Type (Hour, Day, Week, Each)
+  sales_price: number | null;  // NetSuite: Sales Price (baseprice/rate)
+  purchase_price: number | null; // NetSuite: Purchase Price (cost)
+  income_account: string | null; // NetSuite: Income Account
+  expense_account: string | null; // NetSuite: Expense Account
+  tax_schedule: string | null; // NetSuite: Tax Schedule
   prospect_id: number | null;
   netsuite_id: string | null;
   selected: boolean;

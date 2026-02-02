@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText, Output } from "ai";
+import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import {
   insertProspect,
@@ -36,10 +37,15 @@ const customerSchema = z.object({
 
 const serviceItemSchema = z.object({
   item_name: z.string(),
+  display_name: z.string().nullable(),
   item_type: z.string(),
   description: z.string().nullable(),
-  rate: z.number(),
-  rate_type: z.string(),
+  unit_type: z.string().nullable(),
+  sales_price: z.number().nullable(),
+  purchase_price: z.number().nullable(),
+  income_account: z.string().nullable(),
+  expense_account: z.string().nullable(),
+  tax_schedule: z.string().nullable(),
   prospect_id: z.number().nullable(),
   netsuite_id: z.string().nullable(),
   selected: z.boolean(),
@@ -85,7 +91,7 @@ export async function POST(req: Request) {
     switch (entityType) {
       case "prospects": {
         const result = await generateText({
-          model: "openai/gpt-4o-mini",
+          model: anthropic("claude-3-haiku-20240307"),
           output: Output.object({
             schema: z.object({ items: z.array(prospectSchema) }),
           }),
@@ -100,7 +106,7 @@ export async function POST(req: Request) {
 
       case "customers": {
         const result = await generateText({
-          model: "openai/gpt-4o-mini",
+          model: anthropic("claude-3-haiku-20240307"),
           output: Output.object({
             schema: z.object({ items: z.array(customerSchema) }),
           }),
@@ -115,11 +121,26 @@ export async function POST(req: Request) {
 
       case "service_items": {
         const result = await generateText({
-          model: "openai/gpt-4o-mini",
+          model: anthropic("claude-3-haiku-20240307"),
           output: Output.object({
             schema: z.object({ items: z.array(serviceItemSchema) }),
           }),
-          prompt: `Generate ${clampedCount} realistic service items for a professional services/consulting company. Item types should be "Service", "Consulting", "Training", or "Support". Rate types should be "Hourly", "Daily", "Fixed", or "Monthly". Rates should be realistic ($75-$350 for hourly, $500-$2500 for daily, etc). Set prospect_id to null, netsuite_id to null, and selected to false.`,
+          prompt: `Generate ${clampedCount} realistic service items for a professional services/consulting company using NetSuite field naming conventions.
+
+Fields:
+- item_name: Short identifier like "CONSULT-001", "TRAIN-ADV", "SUPPORT-PREM"
+- display_name: Full descriptive name like "Senior Consultant - Hourly", "Advanced Training Package"
+- item_type: "Service", "Non-inventory Part", "Service for Resale", or "Other Charge"
+- description: Brief description of the service
+- unit_type: Must be exactly one of: "Hour", "Day", "Week", or "Each"
+- sales_price: The price charged to customers ($75-$350 for hourly services, $500-$5000 for packages)
+- purchase_price: The cost/purchase price (typically 40-60% of sales_price, or null if not purchased)
+- income_account: "4000 Sales" or "4100 Service Revenue" or null
+- expense_account: "5000 Cost of Sales" or null
+- tax_schedule: "S1 - Taxable" or "S2 - Non Taxable"
+- prospect_id: null
+- netsuite_id: null
+- selected: false`,
         });
 
         for (const item of result.output?.items || []) {
@@ -133,7 +154,7 @@ export async function POST(req: Request) {
         const customerIds = customers.length > 0 ? customers.map((c) => c.id) : null;
         
         const result = await generateText({
-          model: "openai/gpt-4o-mini",
+          model: anthropic("claude-3-haiku-20240307"),
           output: Output.object({
             schema: z.object({ items: z.array(projectSchema) }),
           }),
@@ -172,7 +193,7 @@ export async function POST(req: Request) {
         const projectIds = projects.length > 0 ? projects.map((p) => p.id) : null;
 
         const result = await generateText({
-          model: "openai/gpt-4o-mini",
+          model: anthropic("claude-3-haiku-20240307"),
           output: Output.object({
             schema: z.object({ items: z.array(taskSchema) }),
           }),

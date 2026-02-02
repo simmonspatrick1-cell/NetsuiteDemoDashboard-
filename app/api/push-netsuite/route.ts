@@ -6,11 +6,15 @@ import {
   createProject,
   createServiceItem,
   batchCreate,
+  createEstimate,
+  createProjectTask,
   type TemplateType,
+  type EstimateLineItem,
+  type ProjectTaskAssignee,
 } from "@/lib/netsuite";
 
 interface PushRequest {
-  action?: "quick_setup" | "create_customer" | "create_project" | "create_service_item" | "batch_create" | "push_entity";
+  action?: "quick_setup" | "create_customer" | "create_project" | "create_service_item" | "batch_create" | "push_entity" | "create_estimate" | "create_project_task";
   entityType?: "service_items" | "customers" | "projects" | "prospects" | "tasks";
   prospectName?: string;
   template?: TemplateType;
@@ -23,6 +27,27 @@ interface PushRequest {
   customerCount?: number;
   projectsPerCustomer?: number;
   daysOfTime?: number;
+  // Estimate fields
+  projectId?: number;
+  title?: string;
+  memo?: string;
+  salesRepId?: number;
+  subsidiary?: number;
+  trandate?: string;
+  duedate?: string;
+  items?: EstimateLineItem[];
+  // Project Task fields
+  taskName?: string;
+  plannedWork?: number;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  finishByDate?: string;
+  parentTaskId?: number;
+  defaultServiceItemId?: number;
+  constraintType?: string;
+  nonBillable?: boolean;
+  assignees?: ProjectTaskAssignee[];
 }
 
 async function pushEntity(entityType: string) {
@@ -264,8 +289,8 @@ export async function POST(req: Request) {
           const data = result.data as { data?: { itemId?: number; name?: string } };
           if (data.data?.itemId) {
             await sql`
-              INSERT INTO service_items (item_name, netsuite_id, selected)
-              VALUES (${body.itemName}, ${data.data.itemId.toString()}, false)
+              INSERT INTO service_items (item_name, item_type, netsuite_id, selected)
+              VALUES (${body.itemName}, 'Service', ${data.data.itemId.toString()}, false)
               ON CONFLICT (netsuite_id) DO UPDATE SET item_name = EXCLUDED.item_name
             `;
           }
@@ -281,7 +306,74 @@ export async function POST(req: Request) {
           projectsPerCustomer: body.projectsPerCustomer,
           daysOfTime: body.daysOfTime,
         });
-        
+
+        return NextResponse.json(result);
+      }
+
+      case "create_estimate": {
+        if (!body.customerId) {
+          return NextResponse.json(
+            { error: "customerId is required for create_estimate" },
+            { status: 400 }
+          );
+        }
+        if (!body.items || body.items.length === 0) {
+          return NextResponse.json(
+            { error: "At least one line item is required for create_estimate" },
+            { status: 400 }
+          );
+        }
+
+        const result = await createEstimate({
+          customerId: body.customerId,
+          projectId: body.projectId,
+          title: body.title,
+          memo: body.memo,
+          salesRepId: body.salesRepId,
+          subsidiary: body.subsidiary,
+          trandate: body.trandate,
+          duedate: body.duedate,
+          items: body.items,
+        });
+
+        return NextResponse.json(result);
+      }
+
+      case "create_project_task": {
+        if (!body.projectId) {
+          return NextResponse.json(
+            { error: "projectId is required for create_project_task" },
+            { status: 400 }
+          );
+        }
+        if (!body.taskName) {
+          return NextResponse.json(
+            { error: "taskName is required for create_project_task" },
+            { status: 400 }
+          );
+        }
+        if (!body.plannedWork) {
+          return NextResponse.json(
+            { error: "plannedWork is required for create_project_task" },
+            { status: 400 }
+          );
+        }
+
+        const result = await createProjectTask({
+          projectId: body.projectId,
+          taskName: body.taskName,
+          plannedWork: body.plannedWork,
+          status: body.status,
+          startDate: body.startDate,
+          endDate: body.endDate,
+          finishByDate: body.finishByDate,
+          parentTaskId: body.parentTaskId,
+          defaultServiceItemId: body.defaultServiceItemId,
+          constraintType: body.constraintType,
+          nonBillable: body.nonBillable,
+          assignees: body.assignees,
+        });
+
         return NextResponse.json(result);
       }
 

@@ -1,0 +1,17 @@
+<restlet scriptid="customscript_rl_demo_api">
+  <name>Demo API RESTlet</name>
+  <description>Demo Data Generator RESTlet - Handles creating demo records and fetching reference data</description>
+  <scriptfile>[/SuiteScripts/rl_demo_api.js]</scriptfile>
+  <isinactive>F</isinactive>
+  <notifyadmins>F</notifyadmins>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_rl_demo_api">
+      <status>RELEASED</status>
+      <title>Demo API Deployment</title>
+      <isdeployed>T</isdeployed>
+      <allroles>T</allroles>
+    </scriptdeployment>
+  </scriptdeployments>
+</restlet>

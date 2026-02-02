@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Rocket, Building2, FolderKanban, Trash2, Package } from "lucide-react";
+import { Loader2, Rocket, Building2, FolderKanban, Trash2, Package, FileText, ListTodo, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 const templates = [
@@ -15,6 +15,55 @@ const templates = [
   { value: "it_services", label: "IT Services" },
   { value: "creative", label: "Creative" },
 ];
+
+const UNIT_TYPES = [
+  { id: "Hour", name: "Hour" },
+  { id: "Day", name: "Day" },
+  { id: "Week", name: "Week" },
+  { id: "Each", name: "Each" },
+];
+
+interface NetSuiteCustomer {
+  id: string;
+  entityId: string;
+  companyName: string;
+}
+
+interface NetSuiteProject {
+  id: string;
+  projectId: string;
+  projectName: string;
+  customerId: string;
+}
+
+interface NetSuiteServiceItem {
+  id: string;
+  itemId: string;
+  displayName: string;
+  description: string;
+  basePrice: string;
+}
+
+interface NetSuiteEmployee {
+  id: string;
+  entityId: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface EstimateLineItem {
+  itemId: string;
+  quantity: number;
+  rate: number;
+  description: string;
+}
+
+interface TaskAssignee {
+  resourceId: string;
+  units: number;
+  plannedWork: number;
+}
 
 
 
@@ -33,11 +82,72 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const [serviceItemName, setServiceItemName] = useState("");
+  const [serviceItemDisplayName, setServiceItemDisplayName] = useState("");
+  const [serviceItemUnitType, setServiceItemUnitType] = useState("");
+  const [serviceItemSalesPrice, setServiceItemSalesPrice] = useState("");
+  const [serviceItemPurchasePrice, setServiceItemPurchasePrice] = useState("");
   const [isCreatingServiceItem, setIsCreatingServiceItem] = useState(false);
 
   const [batchCount, setBatchCount] = useState("5");
   const [batchTemplate, setBatchTemplate] = useState("professional_services");
   const [isBatchCreating, setIsBatchCreating] = useState(false);
+
+  // Estimate state
+  const [estimateCustomerId, setEstimateCustomerId] = useState("");
+  const [estimateProjectId, setEstimateProjectId] = useState("");
+  const [estimateTitle, setEstimateTitle] = useState("");
+  const [estimateMemo, setEstimateMemo] = useState("");
+  const [estimateLineItems, setEstimateLineItems] = useState<EstimateLineItem[]>([
+    { itemId: "", quantity: 1, rate: 0, description: "" }
+  ]);
+  const [isCreatingEstimate, setIsCreatingEstimate] = useState(false);
+
+  // Project Task state
+  const [taskProjectId, setTaskProjectId] = useState("");
+  const [taskName, setTaskName] = useState("");
+  const [taskPlannedWork, setTaskPlannedWork] = useState("");
+  const [taskStatus, setTaskStatus] = useState("Not Started");
+  const [taskAssignees, setTaskAssignees] = useState<TaskAssignee[]>([]);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+
+  // NetSuite data for dropdowns
+  const [customers, setCustomers] = useState<NetSuiteCustomer[]>([]);
+  const [projects, setProjects] = useState<NetSuiteProject[]>([]);
+  const [serviceItems, setServiceItems] = useState<NetSuiteServiceItem[]>([]);
+  const [employees, setEmployees] = useState<NetSuiteEmployee[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+
+  // Fetch NetSuite data on mount
+  useEffect(() => {
+    async function fetchNetSuiteData() {
+      setIsLoadingData(true);
+      try {
+        const [customersRes, projectsRes, itemsRes, employeesRes] = await Promise.all([
+          fetch("/api/netsuite-fields?type=customers"),
+          fetch("/api/netsuite-fields?type=projects"),
+          fetch("/api/netsuite-fields?type=service_items"),
+          fetch("/api/netsuite-fields?type=employees"),
+        ]);
+
+        const [customersData, projectsData, itemsData, employeesData] = await Promise.all([
+          customersRes.json(),
+          projectsRes.json(),
+          itemsRes.json(),
+          employeesRes.json(),
+        ]);
+
+        if (customersData.success) setCustomers(customersData.data || []);
+        if (projectsData.success) setProjects(projectsData.data || []);
+        if (itemsData.success) setServiceItems(itemsData.data || []);
+        if (employeesData.success) setEmployees(employeesData.data || []);
+      } catch (error) {
+        console.error("Failed to fetch NetSuite data:", error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    }
+    fetchNetSuiteData();
+  }, []);
 
   const handleQuickSetup = async () => {
     if (!prospectName.trim()) {
@@ -147,7 +257,7 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
       toast.error("Please enter an item name");
       return;
     }
-    
+
     setIsCreatingServiceItem(true);
     try {
       const response = await fetch("/api/push-netsuite", {
@@ -156,14 +266,26 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
         body: JSON.stringify({
           action: "create_service_item",
           itemName: serviceItemName,
+          displayName: serviceItemDisplayName || undefined,
+          unitType: serviceItemUnitType || undefined,
+          salesPrice: serviceItemSalesPrice ? parseFloat(serviceItemSalesPrice) : undefined,
+          purchasePrice: serviceItemPurchasePrice ? parseFloat(serviceItemPurchasePrice) : undefined,
         }),
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         toast.success(`Created service item: ${serviceItemName}`);
         setServiceItemName("");
+        setServiceItemDisplayName("");
+        setServiceItemUnitType("");
+        setServiceItemSalesPrice("");
+        setServiceItemPurchasePrice("");
+        // Refresh service items list
+        const itemsRes = await fetch("/api/netsuite-fields?type=service_items&refresh=true");
+        const itemsData = await itemsRes.json();
+        if (itemsData.success) setServiceItems(itemsData.data || []);
         onSuccess?.();
       } else {
         toast.error(result.error || "Failed to create service item");
@@ -173,6 +295,145 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
     } finally {
       setIsCreatingServiceItem(false);
     }
+  };
+
+  const handleCreateEstimate = async () => {
+    if (!estimateCustomerId) {
+      toast.error("Please select a customer");
+      return;
+    }
+    const validItems = estimateLineItems.filter(item => item.itemId);
+    if (validItems.length === 0) {
+      toast.error("Please add at least one line item");
+      return;
+    }
+
+    setIsCreatingEstimate(true);
+    try {
+      const response = await fetch("/api/push-netsuite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_estimate",
+          customerId: parseInt(estimateCustomerId),
+          projectId: estimateProjectId ? parseInt(estimateProjectId) : undefined,
+          title: estimateTitle || undefined,
+          memo: estimateMemo || undefined,
+          items: validItems.map(item => ({
+            itemId: parseInt(item.itemId),
+            quantity: item.quantity,
+            rate: item.rate || undefined,
+            description: item.description || undefined,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Estimate created successfully!");
+        setEstimateCustomerId("");
+        setEstimateProjectId("");
+        setEstimateTitle("");
+        setEstimateMemo("");
+        setEstimateLineItems([{ itemId: "", quantity: 1, rate: 0, description: "" }]);
+        onSuccess?.();
+      } else {
+        toast.error(result.error || "Failed to create estimate");
+      }
+    } catch (error) {
+      toast.error("Failed to connect to NetSuite");
+    } finally {
+      setIsCreatingEstimate(false);
+    }
+  };
+
+  const handleCreateProjectTask = async () => {
+    if (!taskProjectId) {
+      toast.error("Please select a project");
+      return;
+    }
+    if (!taskName.trim()) {
+      toast.error("Please enter a task name");
+      return;
+    }
+    if (!taskPlannedWork) {
+      toast.error("Please enter planned work hours");
+      return;
+    }
+
+    setIsCreatingTask(true);
+    try {
+      const response = await fetch("/api/push-netsuite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_project_task",
+          projectId: parseInt(taskProjectId),
+          taskName,
+          plannedWork: parseFloat(taskPlannedWork),
+          status: taskStatus,
+          assignees: taskAssignees.filter(a => a.resourceId).map(a => ({
+            resourceId: parseInt(a.resourceId),
+            units: a.units,
+            plannedWork: a.plannedWork,
+          })),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Project task created successfully!");
+        setTaskProjectId("");
+        setTaskName("");
+        setTaskPlannedWork("");
+        setTaskStatus("Not Started");
+        setTaskAssignees([]);
+        onSuccess?.();
+      } else {
+        toast.error(result.error || "Failed to create project task");
+      }
+    } catch (error) {
+      toast.error("Failed to connect to NetSuite");
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  const addEstimateLineItem = () => {
+    setEstimateLineItems([...estimateLineItems, { itemId: "", quantity: 1, rate: 0, description: "" }]);
+  };
+
+  const removeEstimateLineItem = (index: number) => {
+    setEstimateLineItems(estimateLineItems.filter((_, i) => i !== index));
+  };
+
+  const updateEstimateLineItem = (index: number, field: keyof EstimateLineItem, value: string | number) => {
+    const updated = [...estimateLineItems];
+    updated[index] = { ...updated[index], [field]: value };
+    // Auto-fill rate from service item's base price
+    if (field === "itemId" && value) {
+      const item = serviceItems.find(si => si.id === value);
+      if (item?.basePrice) {
+        updated[index].rate = parseFloat(item.basePrice) || 0;
+      }
+    }
+    setEstimateLineItems(updated);
+  };
+
+  const addTaskAssignee = () => {
+    setTaskAssignees([...taskAssignees, { resourceId: "", units: 100, plannedWork: parseFloat(taskPlannedWork) || 8 }]);
+  };
+
+  const removeTaskAssignee = (index: number) => {
+    setTaskAssignees(taskAssignees.filter((_, i) => i !== index));
+  };
+
+  const updateTaskAssignee = (index: number, field: keyof TaskAssignee, value: string | number) => {
+    const updated = [...taskAssignees];
+    updated[index] = { ...updated[index], [field]: value };
+    setTaskAssignees(updated);
   };
 
   const handleBatchCreate = async () => {
@@ -374,17 +635,65 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="serviceItemName" className="text-foreground">Item Name/Number</Label>
-              <Input
-                id="serviceItemName"
-                placeholder="Consulting Services"
-                value={serviceItemName}
-                onChange={(e) => setServiceItemName(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="serviceItemName" className="text-foreground">Item Name/Number *</Label>
+                <Input
+                  id="serviceItemName"
+                  placeholder="CONSULT-001"
+                  value={serviceItemName}
+                  onChange={(e) => setServiceItemName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="serviceItemDisplayName" className="text-foreground">Display Name</Label>
+                <Input
+                  id="serviceItemDisplayName"
+                  placeholder="Consulting Services - Hourly"
+                  value={serviceItemDisplayName}
+                  onChange={(e) => setServiceItemDisplayName(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="serviceItemUnitType" className="text-foreground">Unit Type</Label>
+                <Select value={serviceItemUnitType} onValueChange={setServiceItemUnitType}>
+                  <SelectTrigger id="serviceItemUnitType">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIT_TYPES.map((ut) => (
+                      <SelectItem key={ut.id} value={ut.id}>{ut.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="serviceItemSalesPrice" className="text-foreground">Sales Price</Label>
+                <Input
+                  id="serviceItemSalesPrice"
+                  type="number"
+                  step="0.01"
+                  placeholder="150.00"
+                  value={serviceItemSalesPrice}
+                  onChange={(e) => setServiceItemSalesPrice(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="serviceItemPurchasePrice" className="text-foreground">Purchase Price</Label>
+                <Input
+                  id="serviceItemPurchasePrice"
+                  type="number"
+                  step="0.01"
+                  placeholder="75.00"
+                  value={serviceItemPurchasePrice}
+                  onChange={(e) => setServiceItemPurchasePrice(e.target.value)}
+                />
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Subsidiary: Parent (Holding Co.), Include Children: Yes, Tax Schedule: S2 - Non Taxable, Revenue Recognition Rule: Default One-Time Direct Posting, Rev Rec Forecast Rule: Default One-Time Direct Posting, Direct Revenue Posting: Yes
+              Subsidiary: Parent (Holding Co.), Include Children: Yes, Tax Schedule: S2 - Non Taxable, Revenue Recognition Rule: Default One-Time Direct Posting
             </p>
             <Button onClick={handleCreateServiceItem} disabled={isCreatingServiceItem} className="w-full">
               {isCreatingServiceItem ? (
@@ -449,6 +758,289 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
           <p className="text-sm text-muted-foreground mt-3">
             This creates {batchCount} customers, each with 3 projects and 30 days of time entries.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Create Estimate */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <FileText className="h-5 w-5" />
+            Create Estimate
+          </CardTitle>
+          <CardDescription>
+            Create an estimate with line items in NetSuite
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="estimateCustomer" className="text-foreground">Customer *</Label>
+              <Select value={estimateCustomerId} onValueChange={setEstimateCustomerId}>
+                <SelectTrigger id="estimateCustomer">
+                  <SelectValue placeholder={isLoadingData ? "Loading..." : "Select customer"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.companyName || c.entityId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="estimateProject" className="text-foreground">Project (Optional)</Label>
+              <Select value={estimateProjectId} onValueChange={setEstimateProjectId}>
+                <SelectTrigger id="estimateProject">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">None</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.projectName || p.projectId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="estimateTitle" className="text-foreground">Title</Label>
+              <Input
+                id="estimateTitle"
+                placeholder="Estimate title"
+                value={estimateTitle}
+                onChange={(e) => setEstimateTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="estimateMemo" className="text-foreground">Memo</Label>
+              <Input
+                id="estimateMemo"
+                placeholder="Internal memo"
+                value={estimateMemo}
+                onChange={(e) => setEstimateMemo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Line Items */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-foreground">Line Items</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addEstimateLineItem}>
+                <Plus className="h-4 w-4 mr-1" /> Add Item
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {estimateLineItems.map((lineItem, index) => (
+                <div key={index} className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <Select
+                      value={lineItem.itemId}
+                      onValueChange={(v) => updateEstimateLineItem(index, "itemId", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select service item" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serviceItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.displayName || item.itemId}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-20">
+                    <Input
+                      type="number"
+                      placeholder="Qty"
+                      value={lineItem.quantity}
+                      onChange={(e) => updateEstimateLineItem(index, "quantity", parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Rate"
+                      value={lineItem.rate || ""}
+                      onChange={(e) => updateEstimateLineItem(index, "rate", parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Description"
+                      value={lineItem.description}
+                      onChange={(e) => updateEstimateLineItem(index, "description", e.target.value)}
+                    />
+                  </div>
+                  {estimateLineItems.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-600"
+                      onClick={() => removeEstimateLineItem(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Button onClick={handleCreateEstimate} disabled={isCreatingEstimate} className="w-full">
+            {isCreatingEstimate ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4 mr-2" />
+            )}
+            Create Estimate
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Create Project Task */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-foreground">
+            <ListTodo className="h-5 w-5" />
+            Create Project Task
+          </CardTitle>
+          <CardDescription>
+            Create a project task with assignees in NetSuite
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="taskProject" className="text-foreground">Project *</Label>
+              <Select value={taskProjectId} onValueChange={setTaskProjectId}>
+                <SelectTrigger id="taskProject">
+                  <SelectValue placeholder={isLoadingData ? "Loading..." : "Select project"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.projectName || p.projectId}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="taskStatus" className="text-foreground">Status</Label>
+              <Select value={taskStatus} onValueChange={setTaskStatus}>
+                <SelectTrigger id="taskStatus">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Not Started">Not Started</SelectItem>
+                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="On Hold">On Hold</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="taskName" className="text-foreground">Task Name *</Label>
+              <Input
+                id="taskName"
+                placeholder="Task name"
+                value={taskName}
+                onChange={(e) => setTaskName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="taskPlannedWork" className="text-foreground">Planned Work (hours) *</Label>
+              <Input
+                id="taskPlannedWork"
+                type="number"
+                step="0.5"
+                placeholder="8"
+                value={taskPlannedWork}
+                onChange={(e) => setTaskPlannedWork(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Assignees */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-foreground">Assignees (Optional)</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addTaskAssignee}>
+                <Plus className="h-4 w-4 mr-1" /> Add Assignee
+              </Button>
+            </div>
+            {taskAssignees.length > 0 && (
+              <div className="space-y-2">
+                {taskAssignees.map((assignee, index) => (
+                  <div key={index} className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Select
+                        value={assignee.resourceId}
+                        onValueChange={(v) => updateTaskAssignee(index, "resourceId", v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {employees.map((emp) => (
+                            <SelectItem key={emp.id} value={emp.id}>
+                              {emp.name || `${emp.firstName} ${emp.lastName}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-24">
+                      <Input
+                        type="number"
+                        placeholder="Units %"
+                        value={assignee.units}
+                        onChange={(e) => updateTaskAssignee(index, "units", parseFloat(e.target.value) || 100)}
+                      />
+                    </div>
+                    <div className="w-28">
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="Hours"
+                        value={assignee.plannedWork}
+                        onChange={(e) => updateTaskAssignee(index, "plannedWork", parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-red-500 hover:text-red-600"
+                      onClick={() => removeTaskAssignee(index)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Button onClick={handleCreateProjectTask} disabled={isCreatingTask} className="w-full">
+            {isCreatingTask ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <ListTodo className="h-4 w-4 mr-2" />
+            )}
+            Create Project Task
+          </Button>
         </CardContent>
       </Card>
     </div>

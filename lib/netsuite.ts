@@ -232,6 +232,30 @@ export async function getExpenseTypes() {
   return callNetSuiteRestlet("GET", undefined, { action: "expense_types" });
 }
 
+export async function getUnitTypes() {
+  return callNetSuiteRestlet("GET", undefined, { action: "unit_types" });
+}
+
+export async function getNetSuiteServiceItems() {
+  return callNetSuiteRestlet("GET", undefined, { action: "service_items" });
+}
+
+export async function getNetSuiteEmployees() {
+  return callNetSuiteRestlet("GET", undefined, { action: "employees" });
+}
+
+export async function getNetSuiteProjects(customerId?: number) {
+  const params: Record<string, string> = { action: "projects" };
+  if (customerId) {
+    params.customerId = customerId.toString();
+  }
+  return callNetSuiteRestlet("GET", undefined, params);
+}
+
+export async function getNetSuiteCustomers() {
+  return callNetSuiteRestlet("GET", undefined, { action: "customers" });
+}
+
 // ============================================
 // POST Actions
 // ============================================
@@ -354,6 +378,81 @@ export async function batchCreate(params?: {
     customerCount: params?.customerCount || 5,
     projectsPerCustomer: params?.projectsPerCustomer || 3,
     daysOfTime: params?.daysOfTime || 30,
+  });
+}
+
+export interface EstimateLineItem {
+  itemId: number;
+  quantity: number;
+  rate?: number;
+  description?: string;
+  department?: number;
+  classId?: number;
+  location?: number;
+}
+
+export async function createEstimate(params: {
+  customerId: number;
+  projectId?: number;
+  title?: string;
+  memo?: string;
+  salesRepId?: number;
+  subsidiary?: number;
+  trandate?: string;
+  duedate?: string;
+  items: EstimateLineItem[];
+}) {
+  return callNetSuiteRestlet("POST", {
+    action: "createEstimate",
+    customerId: params.customerId,
+    projectId: params.projectId,
+    title: params.title,
+    memo: params.memo,
+    salesRepId: params.salesRepId,
+    subsidiary: params.subsidiary,
+    trandate: params.trandate,
+    duedate: params.duedate,
+    items: params.items,
+  });
+}
+
+export interface ProjectTaskAssignee {
+  resourceId: number;
+  units?: number;
+  plannedWork: number;
+  unitCost?: number;
+  serviceItemId?: number;
+  billingClass?: number;
+}
+
+export async function createProjectTask(params: {
+  projectId: number;
+  taskName: string;
+  plannedWork: number;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  finishByDate?: string;
+  parentTaskId?: number;
+  defaultServiceItemId?: number;
+  constraintType?: string;
+  nonBillable?: boolean;
+  assignees?: ProjectTaskAssignee[];
+}) {
+  return callNetSuiteRestlet("POST", {
+    action: "createProjectTask",
+    projectId: params.projectId,
+    taskName: params.taskName,
+    plannedWork: params.plannedWork,
+    status: params.status,
+    startDate: params.startDate,
+    endDate: params.endDate,
+    finishByDate: params.finishByDate,
+    parentTaskId: params.parentTaskId,
+    defaultServiceItemId: params.defaultServiceItemId,
+    constraintType: params.constraintType,
+    nonBillable: params.nonBillable,
+    assignees: params.assignees,
   });
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -9,11 +10,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Check, X, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import type { Prospect, Customer, ServiceItem, Project, Task, EntityType } from "@/lib/demo-types";
 
 interface DataTableProps {
   entityType: EntityType;
   data: Prospect[] | Customer[] | ServiceItem[] | Project[] | Task[];
+  onDataChange?: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -30,7 +36,111 @@ const statusColors: Record<string, string> = {
   in_progress: "bg-blue-500/10 text-blue-500",
 };
 
-export function DataTable({ entityType, data }: DataTableProps) {
+// Fallback unit types if API fails
+const FALLBACK_UNIT_TYPES = [
+  { id: "Hour", name: "Hour" },
+  { id: "Day", name: "Day" },
+  { id: "Week", name: "Week" },
+  { id: "Each", name: "Each" },
+];
+
+export function DataTable({ entityType, data, onDataChange }: DataTableProps) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValues, setEditValues] = useState<{
+    unit_type?: string;
+    sales_price?: string;
+    purchase_price?: string;
+  }>({});
+  const [unitTypes, setUnitTypes] = useState<{ id: string; name: string }[]>(FALLBACK_UNIT_TYPES);
+
+  // Fetch unit types from NetSuite on mount
+  useEffect(() => {
+    async function fetchUnitTypes() {
+      try {
+        const response = await fetch("/api/netsuite-fields?type=unit_types");
+        const result = await response.json();
+        if (result.success && result.data?.length > 0) {
+          setUnitTypes(result.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch unit types, using fallback:", error);
+      }
+    }
+    fetchUnitTypes();
+  }, []);
+
+  const handleEditStart = (item: ServiceItem) => {
+    setEditingId(item.id);
+    setEditValues({
+      unit_type: item.unit_type || "",
+      sales_price: item.sales_price?.toString() || "",
+      purchase_price: item.purchase_price?.toString() || "",
+    });
+  };
+
+  const handleEditCancel = () => {
+    setEditingId(null);
+    setEditValues({});
+  };
+
+  const handleEditSave = async (id: number) => {
+    try {
+      const response = await fetch("/api/service-items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          unit_type: editValues.unit_type || null,
+          sales_price: editValues.sales_price ? parseFloat(editValues.sales_price) : null,
+          purchase_price: editValues.purchase_price ? parseFloat(editValues.purchase_price) : null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Service item updated");
+        setEditingId(null);
+        setEditValues({});
+        onDataChange?.();
+      } else {
+        toast.error(result.error || "Failed to update");
+      }
+    } catch (error) {
+      toast.error("Failed to update service item");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await fetch("/api/service-items", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success("Service item deleted");
+        onDataChange?.();
+      } else {
+        toast.error(result.error || "Failed to delete");
+      }
+    } catch (error) {
+      toast.error("Failed to delete service item");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, itemId: number) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleEditSave(itemId);
+    } else if (e.key === "Escape") {
+      handleEditCancel();
+    }
+  };
+
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 border border-dashed border-border rounded-lg">
@@ -93,21 +203,92 @@ export function DataTable({ entityType, data }: DataTableProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="text-foreground">Name</TableHead>
+          <TableHead className="text-foreground">Item Name/Number</TableHead>
+          <TableHead className="text-foreground">Display Name</TableHead>
           <TableHead className="text-foreground">Type</TableHead>
-          <TableHead className="text-foreground">Rate</TableHead>
-          <TableHead className="text-foreground">Rate Type</TableHead>
+          <TableHead className="text-foreground">Unit Type</TableHead>
+          <TableHead className="text-foreground">Sales Price</TableHead>
+          <TableHead className="text-foreground">Purchase Price</TableHead>
           <TableHead className="text-foreground">Description</TableHead>
+          <TableHead className="text-foreground w-[100px]">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {items.map((i) => (
-          <TableRow key={i.id}>
-            <TableCell className="font-medium text-foreground">{i.item_name}</TableCell>
-            <TableCell className="text-muted-foreground">{i.item_type}</TableCell>
-            <TableCell className="text-muted-foreground">${Number(i.rate).toFixed(2)}</TableCell>
-            <TableCell className="text-muted-foreground">{i.rate_type}</TableCell>
-            <TableCell className="text-muted-foreground max-w-xs truncate">{i.description || "-"}</TableCell>
+        {items.map((item) => (
+          <TableRow key={item.id}>
+            <TableCell className="font-medium text-foreground">{item.item_name}</TableCell>
+            <TableCell className="text-muted-foreground">{item.display_name || "-"}</TableCell>
+            <TableCell className="text-muted-foreground">{item.item_type}</TableCell>
+            {editingId === item.id ? (
+              <>
+                <TableCell>
+                  <select
+                    className="w-24 h-8 rounded-md border border-input bg-background px-2 text-sm"
+                    value={editValues.unit_type || ""}
+                    onChange={(e) => setEditValues({ ...editValues, unit_type: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    {unitTypes.map((ut) => (
+                      <option key={ut.id} value={ut.name}>{ut.name}</option>
+                    ))}
+                  </select>
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    className="w-24 h-8"
+                    value={editValues.sales_price || ""}
+                    onChange={(e) => setEditValues({ ...editValues, sales_price: e.target.value })}
+                    onKeyDown={(e) => handleKeyDown(e, item.id)}
+                    placeholder="Sales Price"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    className="w-24 h-8"
+                    value={editValues.purchase_price || ""}
+                    onChange={(e) => setEditValues({ ...editValues, purchase_price: e.target.value })}
+                    onKeyDown={(e) => handleKeyDown(e, item.id)}
+                    placeholder="Purchase Price"
+                  />
+                </TableCell>
+              </>
+            ) : (
+              <>
+                <TableCell className="text-muted-foreground">{item.unit_type || "-"}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {item.sales_price != null ? `$${Number(item.sales_price).toFixed(2)}` : "-"}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {item.purchase_price != null ? `$${Number(item.purchase_price).toFixed(2)}` : "-"}
+                </TableCell>
+              </>
+            )}
+            <TableCell className="text-muted-foreground max-w-xs truncate">{item.description || "-"}</TableCell>
+            <TableCell>
+              {editingId === item.id ? (
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEditSave(item.id)}>
+                    <Check className="h-4 w-4 text-green-500" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleEditCancel}>
+                    <X className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEditStart(item)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 hover:text-red-600" onClick={() => handleDelete(item.id)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
