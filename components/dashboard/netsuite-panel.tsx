@@ -791,12 +791,12 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="estimateProject" className="text-foreground">Project (Optional)</Label>
-              <Select value={estimateProjectId} onValueChange={setEstimateProjectId}>
+              <Select value={estimateProjectId || "__none__"} onValueChange={(v) => setEstimateProjectId(v === "__none__" ? "" : v)}>
                 <SelectTrigger id="estimateProject">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="__none__">None</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.projectName || p.projectId}
