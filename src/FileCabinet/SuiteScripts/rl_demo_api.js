@@ -229,15 +229,16 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
             log.debug('RESTlet GET Called', 'Action: ' + action);
 
             switch(action) {
-                case 'unit_types':
+                // camelCase versions (primary)
+                case 'unitTypes':
                     response = handleGetUnitTypes();
                     break;
 
-                case 'billing_types':
+                case 'billingTypes':
                     response = handleGetBillingTypes();
                     break;
 
-                case 'expense_types':
+                case 'expenseTypes':
                     response = handleGetExpenseTypes();
                     break;
 
@@ -245,23 +246,23 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     response = handleGetTemplates();
                     break;
 
-                case 'project_templates':
+                case 'projectTemplates':
                     response = handleGetProjectTemplates(context.industry);
                     break;
 
-                case 'customer_templates':
+                case 'customerTemplates':
                     response = handleGetCustomerTemplates(context.industry);
                     break;
 
-                case 'service_item_templates':
+                case 'serviceItemTemplates':
                     response = handleGetServiceItemTemplates(context.industry);
                     break;
 
-                case 'employee_roles':
+                case 'employeeRoles':
                     response = handleGetEmployeeRoles();
                     break;
 
-                case 'service_items':
+                case 'serviceItems':
                     response = handleGetServiceItems();
                     break;
 
@@ -273,12 +274,24 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     response = handleGetProjects(context.customerId);
                     break;
 
-                case 'project_details':
+                case 'projectDetails':
                     response = handleGetProjectDetails(context.projectId);
                     break;
 
                 case 'customers':
                     response = handleGetCustomers();
+                    break;
+
+                case 'listCustomers':
+                    response = handleListCustomers(context.prefix);
+                    break;
+
+                case 'listProjects':
+                    response = handleListProjects(context.customerId);
+                    break;
+
+                case 'jobStatus':
+                    response = handleGetJobStatus(context.taskId);
                     break;
 
                 default:
@@ -635,6 +648,112 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
         return { success: true, customers: customers };
     }
 
+    /**
+     * List customers with optional prefix filter (for demo data)
+     */
+    function handleListCustomers(prefix) {
+        var customers = [];
+        var searchPrefix = prefix || 'Demo';
+
+        try {
+            var custSearch = search.create({
+                type: search.Type.CUSTOMER,
+                filters: [
+                    ['isinactive', 'is', 'F'],
+                    'AND',
+                    ['companyname', 'startswith', searchPrefix]
+                ],
+                columns: [
+                    search.createColumn({ name: 'internalid' }),
+                    search.createColumn({ name: 'entityid' }),
+                    search.createColumn({ name: 'companyname' }),
+                    search.createColumn({ name: 'email' })
+                ]
+            });
+
+            custSearch.run().each(function(result) {
+                customers.push({
+                    id: result.getValue({ name: 'internalid' }),
+                    entityId: result.getValue({ name: 'entityid' }),
+                    companyName: result.getValue({ name: 'companyname' }),
+                    email: result.getValue({ name: 'email' })
+                });
+                return true;
+            });
+
+        } catch(e) {
+            log.error('Error listing customers', e.message);
+            return { success: false, error: e.message };
+        }
+
+        return { success: true, customers: customers };
+    }
+
+    /**
+     * List projects for a specific customer
+     */
+    function handleListProjects(customerId) {
+        var projects = [];
+
+        if (!customerId) {
+            return { success: false, error: 'customerId is required' };
+        }
+
+        try {
+            var projSearch = search.create({
+                type: search.Type.JOB,
+                filters: [
+                    ['isinactive', 'is', 'F'],
+                    'AND',
+                    ['parent', 'anyof', customerId]
+                ],
+                columns: [
+                    search.createColumn({ name: 'internalid' }),
+                    search.createColumn({ name: 'entityid' }),
+                    search.createColumn({ name: 'companyname' }),
+                    search.createColumn({ name: 'entitystatus' }),
+                    search.createColumn({ name: 'startdate' }),
+                    search.createColumn({ name: 'projectedenddate' })
+                ]
+            });
+
+            projSearch.run().each(function(result) {
+                projects.push({
+                    id: result.getValue({ name: 'internalid' }),
+                    projectId: result.getValue({ name: 'entityid' }),
+                    projectName: result.getValue({ name: 'companyname' }),
+                    status: result.getText({ name: 'entitystatus' }),
+                    startDate: result.getValue({ name: 'startdate' }),
+                    endDate: result.getValue({ name: 'projectedenddate' })
+                });
+                return true;
+            });
+
+        } catch(e) {
+            log.error('Error listing projects', e.message);
+            return { success: false, error: e.message };
+        }
+
+        return { success: true, projects: projects };
+    }
+
+    /**
+     * Get job/task status (placeholder for async operations)
+     */
+    function handleGetJobStatus(taskId) {
+        if (!taskId) {
+            return { success: false, error: 'taskId is required' };
+        }
+
+        // This is a placeholder - could be expanded to track async batch operations
+        return {
+            success: true,
+            taskId: taskId,
+            status: 'COMPLETE',
+            message: 'Task status check - no async tracking implemented'
+        };
+    }
+
     // ============================================
     // POST HANDLER
     // ============================================
@@ -697,6 +816,14 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     response = handleCleanupDemoData(data);
                     break;
 
+                case 'quickSetup':
+                    response = handleQuickSetup(context);
+                    break;
+
+                case 'batchCreate':
+                    response = handleBatchCreate(context);
+                    break;
+
                 default:
                     response = { success: false, error: 'Unknown action: ' + action };
             }
@@ -717,16 +844,17 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
         return {
             success: true,
             message: 'Demo Data Generator RESTlet is running',
-            version: '4.0',
+            version: '5.0',
             supportedGetActions: [
-                'unit_types', 'billing_types', 'expense_types', 'templates',
-                'project_templates', 'customer_templates', 'service_item_templates', 'employee_roles',
-                'service_items', 'employees', 'projects', 'project_details', 'customers'
+                'unitTypes', 'billingTypes', 'expenseTypes', 'templates',
+                'projectTemplates', 'customerTemplates', 'serviceItemTemplates', 'employeeRoles',
+                'serviceItems', 'employees', 'projects', 'projectDetails', 'customers',
+                'listCustomers', 'listProjects', 'jobStatus'
             ],
             supportedPostActions: [
                 'getInfo', 'createCustomer', 'createProspect', 'createProject', 'createTask',
                 'createServiceItem', 'createEstimate', 'createEstimateFromBudget', 'createProjectTask',
-                'createTimeEntry', 'generateTimeEntries', 'cleanupDemoData'
+                'createTimeEntry', 'generateTimeEntries', 'cleanupDemoData', 'quickSetup', 'batchCreate'
             ]
         };
     }
@@ -1298,6 +1426,162 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
 
         } catch(e) {
             log.error('Generate Time Entries Error', e.message);
+            return { success: false, error: e.message };
+        }
+    }
+
+    /**
+     * Quick setup - creates a customer and project for demo
+     */
+    function handleQuickSetup(data) {
+        const { prospectName, template, projectStatus, projectManager, billingType, projectExpenseType } = data;
+
+        if (!prospectName) {
+            return { success: false, error: 'prospectName is required' };
+        }
+
+        const industry = template || 'professional_services';
+        const customers = [];
+        const projects = [];
+
+        try {
+            // Create customer
+            const customerRecord = record.create({
+                type: record.Type.CUSTOMER,
+                isDynamic: true
+            });
+
+            const customerName = prospectName + ' - Demo';
+            customerRecord.setValue({ fieldId: 'companyname', value: customerName });
+            customerRecord.setValue({ fieldId: 'subsidiary', value: 1 });
+
+            const customerId = customerRecord.save();
+            customers.push({
+                id: customerId,
+                name: customerName,
+                url: 'https://system.netsuite.com/app/common/entity/custjob.nl?id=' + customerId
+            });
+
+            // Get project templates for the industry
+            const projectTemplates = getProjectTemplates(industry);
+            const selectedTemplates = projectTemplates.slice(0, 3); // Create 3 projects
+
+            for (let i = 0; i < selectedTemplates.length; i++) {
+                const template = selectedTemplates[i];
+
+                const projectRecord = record.create({
+                    type: record.Type.JOB,
+                    isDynamic: true
+                });
+
+                const projectName = prospectName + ' - ' + template.name;
+                projectRecord.setValue({ fieldId: 'companyname', value: projectName });
+                projectRecord.setValue({ fieldId: 'parent', value: customerId });
+                projectRecord.setValue({ fieldId: 'jobbillingtype', value: 'CB' });
+
+                try {
+                    projectRecord.setValue({ fieldId: 'projectexpensetype', value: -2 });
+                } catch(e) {
+                    log.debug('Could not set project expense type', e.message);
+                }
+
+                const projectId = projectRecord.save();
+                projects.push({
+                    id: projectId,
+                    name: projectName,
+                    customerId: customerId,
+                    url: 'https://system.netsuite.com/app/accounting/project/project.nl?id=' + projectId
+                });
+            }
+
+            log.audit('Quick Setup Complete', 'Customer: ' + customerId + ', Projects: ' + projects.length);
+
+            return {
+                success: true,
+                message: 'Quick setup completed successfully',
+                data: {
+                    customers: customers,
+                    projects: projects
+                }
+            };
+
+        } catch(e) {
+            log.error('Quick Setup Error', e.message);
+            return { success: false, error: e.message };
+        }
+    }
+
+    /**
+     * Batch create demo data
+     */
+    function handleBatchCreate(data) {
+        const { template, customerCount, projectsPerCustomer, daysOfTime } = data;
+
+        const industry = template || 'professional_services';
+        const numCustomers = customerCount || 5;
+        const numProjects = projectsPerCustomer || 3;
+        const numDays = daysOfTime || 30;
+
+        const createdCustomers = [];
+        const createdProjects = [];
+
+        try {
+            const customerTemplates = getCustomerTemplates(industry);
+            const projectTemplates = getProjectTemplates(industry);
+
+            for (let c = 0; c < numCustomers; c++) {
+                // Create customer
+                const customerRecord = record.create({
+                    type: record.Type.CUSTOMER,
+                    isDynamic: true
+                });
+
+                const baseName = customerTemplates[c % customerTemplates.length];
+                const customerName = 'Demo - ' + baseName + ' ' + (c + 1);
+                customerRecord.setValue({ fieldId: 'companyname', value: customerName });
+                customerRecord.setValue({ fieldId: 'subsidiary', value: 1 });
+
+                const customerId = customerRecord.save();
+                createdCustomers.push({ id: customerId, name: customerName });
+
+                // Create projects for this customer
+                for (let p = 0; p < numProjects; p++) {
+                    const projectTemplate = projectTemplates[p % projectTemplates.length];
+
+                    const projectRecord = record.create({
+                        type: record.Type.JOB,
+                        isDynamic: true
+                    });
+
+                    const projectName = customerName + ' - ' + projectTemplate.name;
+                    projectRecord.setValue({ fieldId: 'companyname', value: projectName });
+                    projectRecord.setValue({ fieldId: 'parent', value: customerId });
+                    projectRecord.setValue({ fieldId: 'jobbillingtype', value: 'CB' });
+
+                    try {
+                        projectRecord.setValue({ fieldId: 'projectexpensetype', value: -2 });
+                    } catch(e) {
+                        // Field may not be available
+                    }
+
+                    const projectId = projectRecord.save();
+                    createdProjects.push({ id: projectId, name: projectName, customerId: customerId });
+                }
+            }
+
+            log.audit('Batch Create Complete', 'Customers: ' + createdCustomers.length + ', Projects: ' + createdProjects.length);
+
+            return {
+                success: true,
+                message: 'Batch create completed',
+                customersCreated: createdCustomers.length,
+                projectsCreated: createdProjects.length,
+                customers: createdCustomers,
+                projects: createdProjects
+            };
+
+        } catch(e) {
+            log.error('Batch Create Error', e.message);
             return { success: false, error: e.message };
         }
     }

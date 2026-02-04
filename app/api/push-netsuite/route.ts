@@ -55,6 +55,22 @@ async function pushEntity(entityType: string) {
   let errorCount = 0;
   const errors: string[] = [];
 
+  // Helper to extract an ID from various RESTlet response shapes
+  const extractId = (data: any, candidates: string[]): string | null => {
+    if (!data) return null;
+    // Sometimes the payload comes under data.data
+    const inner = (data && typeof data === 'object' && 'data' in data) ? (data as any).data : data;
+    for (const key of candidates) {
+      const val = inner?.[key] ?? data?.[key] ?? data?.data?.[key];
+      if (val != null) return String(val);
+    }
+    // Common generic field
+    if (inner?.id != null) return String(inner.id);
+    if (data?.id != null) return String(data.id);
+    if (data?.data?.id != null) return String(data.data.id);
+    return null;
+  };
+
   switch (entityType) {
     case "service_items": {
       // Get all service items without a netsuite_id
@@ -66,10 +82,10 @@ async function pushEntity(entityType: string) {
         });
         
         if (result.success && result.data) {
-          const data = result.data as { data?: { itemId?: number } };
-          if (data.data?.itemId) {
+          const id = extractId(result.data, ["itemId"]);
+          if (id) {
             await sql`
-              UPDATE service_items SET netsuite_id = ${data.data.itemId.toString()} WHERE id = ${item.id}
+              UPDATE service_items SET netsuite_id = ${id} WHERE id = ${item.id}
             `;
             successCount++;
           } else {
@@ -95,10 +111,10 @@ async function pushEntity(entityType: string) {
         });
         
         if (result.success && result.data) {
-          const data = result.data as { data?: { customerId?: number } };
-          if (data.data?.customerId) {
+          const id = extractId(result.data, ["customerId"]);
+          if (id) {
             await sql`
-              UPDATE customers SET netsuite_id = ${data.data.customerId.toString()} WHERE id = ${customer.id}
+              UPDATE customers SET netsuite_id = ${id} WHERE id = ${customer.id}
             `;
             successCount++;
           } else {
@@ -133,10 +149,10 @@ async function pushEntity(entityType: string) {
         });
         
         if (result.success && result.data) {
-          const data = result.data as { data?: { projectId?: number } };
-          if (data.data?.projectId) {
+          const id = extractId(result.data, ["projectId"]);
+          if (id) {
             await sql`
-              UPDATE projects SET netsuite_id = ${data.data.projectId.toString()} WHERE id = ${project.id}
+              UPDATE projects SET netsuite_id = ${id} WHERE id = ${project.id}
             `;
             successCount++;
           } else {

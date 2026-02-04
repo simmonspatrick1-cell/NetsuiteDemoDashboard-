@@ -171,31 +171,79 @@ export async function callNetSuiteRestlet(
       "Content-Type": "application/json",
     };
 
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
+    // Build POST/PUT/DELETE body in the format NetSuite Restlet expects
+    const buildBody = (raw?: unknown) => {
+      if (!raw || typeof raw !== "object") return raw;
+      const obj = raw as Record<string, any>;
+      // If an action is present and no explicit data wrapper was provided,
+      // wrap remaining keys under `data` so Restlet can read context.data
+      if (obj.action && obj.data == null) {
+        const { action, ...rest } = obj;
+        return { action, data: Object.keys(rest).length ? rest : undefined };
+      }
+      return raw;
     };
 
-    if (payload && (method === "POST" || method === "PUT" || method === "DELETE")) {
-      fetchOptions.body = JSON.stringify(payload);
-    }
+    // Simple retry/backoff for transient errors (429/5xx) and a timeout
+    const REQUEST_TIMEOUT_MS = 15000;
+    const MAX_RETRIES = 2;
 
-    const response = await fetch(url, fetchOptions);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        error: `NetSuite API error: ${response.status} - ${errorText}`,
-      };
-    }
-
-    const data = await response.json();
-    
-    return {
-      success: true,
-      data,
+    const doFetch = async (): Promise<Response> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const fetchOptions: RequestInit = {
+          method,
+          headers,
+          signal: controller.signal,
+        };
+        if (payload && (method === "POST" || method === "PUT" || method === "DELETE")) {
+          fetchOptions.body = JSON.stringify(buildBody(payload));
+        }
+        return await fetch(url, fetchOptions);
+      } finally {
+        clearTimeout(timeout);
+      }
     };
+
+    let attempt = 0;
+    let response: Response | undefined;
+    // Retry loop
+    while (attempt <= MAX_RETRIES) {
+      response = await doFetch().catch((err) => {
+        // Treat network/abort as retriable
+        return new Response(null, { status: 599, statusText: (err as Error)?.message || "Network error" });
+      });
+
+      if (response && response.ok) break;
+      const status = response?.status ?? 599;
+      if (status === 429 || (status >= 500 && status <= 599)) {
+        // backoff
+        const backoff = Math.min(1000 * Math.pow(2, attempt), 4000);
+        await new Promise((r) => setTimeout(r, backoff));
+        attempt++;
+        continue;
+      }
+      break;
+    }
+
+    if (!response || !response.ok) {
+      const text = response ? await response.text().catch(() => "") : "";
+      return { success: false, error: `NetSuite API error: ${response?.status ?? 0} - ${text || response?.statusText || "Unknown"}` };
+    }
+
+    // Attempt JSON parse, fall back to text
+    let data: any;
+    const rawText = await response.text();
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = { raw: rawText };
+    }
+
+    // If the RESTlet returns a JSON with { success: false }, reflect that in our wrapper
+    const bodySuccess = data && typeof data === 'object' && 'success' in data ? Boolean((data as any).success) : true;
+    return { success: bodySuccess, data };
   } catch (error) {
     return {
       success: false,
@@ -213,31 +261,31 @@ export async function getTemplates() {
 }
 
 export async function getJobStatus(taskId: string) {
-  return callNetSuiteRestlet("GET", undefined, { action: "status", taskId });
+  return callNetSuiteRestlet("GET", undefined, { action: "jobStatus", taskId });
 }
 
 export async function listDemoCustomers(prefix = "Demo") {
-  return callNetSuiteRestlet("GET", undefined, { action: "list_customers", prefix });
+  return callNetSuiteRestlet("GET", undefined, { action: "listCustomers", prefix });
 }
 
 export async function listDemoProjects(customerId: number) {
-  return callNetSuiteRestlet("GET", undefined, { action: "list_projects", customerId: customerId.toString() });
+  return callNetSuiteRestlet("GET", undefined, { action: "listProjects", customerId: customerId.toString() });
 }
 
 export async function getBillingTypes() {
-  return callNetSuiteRestlet("GET", undefined, { action: "billing_types" });
+  return callNetSuiteRestlet("GET", undefined, { action: "billingTypes" });
 }
 
 export async function getExpenseTypes() {
-  return callNetSuiteRestlet("GET", undefined, { action: "expense_types" });
+  return callNetSuiteRestlet("GET", undefined, { action: "expenseTypes" });
 }
 
 export async function getUnitTypes() {
-  return callNetSuiteRestlet("GET", undefined, { action: "unit_types" });
+  return callNetSuiteRestlet("GET", undefined, { action: "unitTypes" });
 }
 
 export async function getNetSuiteServiceItems() {
-  return callNetSuiteRestlet("GET", undefined, { action: "service_items" });
+  return callNetSuiteRestlet("GET", undefined, { action: "serviceItems" });
 }
 
 export async function getNetSuiteEmployees() {
@@ -275,7 +323,7 @@ export interface QuickSetupResult {
 
 export async function quickSetup(prospectName: string, template: TemplateType = "professional_services"): Promise<QuickSetupResult> {
   const result = await callNetSuiteRestlet("POST", {
-    action: "quick_setup",
+    action: "quickSetup",
     prospectName,
     template, // Template for demo data structure, not a NetSuite field
     // Hardcoded project fields as requested
@@ -300,7 +348,7 @@ export async function createCustomer(params: {
   phone?: string;
 }) {
   return callNetSuiteRestlet("POST", {
-    action: "create_customer",
+    action: "createCustomer",
     companyName: params.companyName,
     subsidiary: params.subsidiary || 1, // Parent (Holding Co.)
     email: params.email,
@@ -313,7 +361,7 @@ export async function createProject(params: {
   customerId: number;
 }) {
   return callNetSuiteRestlet("POST", {
-    action: "create_project",
+    action: "createProject",
     projectName: params.projectName,
     customerId: params.customerId,
     // Hardcoded fields as requested
@@ -332,7 +380,7 @@ export async function createServiceItem(params: {
   const uniqueItemName = `${params.itemName} - ${suffix}`;
   
   return callNetSuiteRestlet("POST", {
-    action: "create_service_item",
+    action: "createServiceItem",
     itemName: uniqueItemName,
     displayName: uniqueItemName,
     // Hardcoded fields using internal IDs
@@ -356,7 +404,7 @@ export async function createTimeEntry(params: {
   memo?: string;
 }) {
   return callNetSuiteRestlet("POST", {
-    action: "create_time_entry",
+    action: "createTimeEntry",
     employeeId: params.employeeId,
     projectId: params.projectId,
     hours: params.hours,
@@ -373,7 +421,7 @@ export async function batchCreate(params?: {
   daysOfTime?: number;
 }) {
   return callNetSuiteRestlet("POST", {
-    action: "batch_create",
+    action: "batchCreate",
     template: params?.template || "professional_services",
     customerCount: params?.customerCount || 5,
     projectsPerCustomer: params?.projectsPerCustomer || 3,
@@ -461,8 +509,17 @@ export async function createProjectTask(params: {
 // ============================================
 
 export async function cleanupDemoData(recordType: string, prefix: string) {
-  return callNetSuiteRestlet("DELETE", {
+  // RESTlet implements this under POST, action: cleanupDemoData
+  return callNetSuiteRestlet("POST", {
+    action: "cleanupDemoData",
     recordType,
     prefix,
   });
+}
+
+// ============================================
+// INFO/HEALTH
+// ============================================
+export async function getInfo() {
+  return callNetSuiteRestlet("POST", { action: "getInfo" });
 }

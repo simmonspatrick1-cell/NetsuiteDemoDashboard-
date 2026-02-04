@@ -1,0 +1,22 @@
+<restlet scriptid="customscript_basic_demo_api">
+  <description>Basic Demo Data Generator RESTlet - Handles creating demo records and fetching reference data</description>
+  <isinactive>F</isinactive>
+  <name>Basic Demo API RESTlet</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptfile>[/SuiteScripts/netsuite-restlet.js]</scriptfile>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_basic_demo_api">
+      <allemployees>F</allemployees>
+      <allpartners>F</allpartners>
+      <allroles>T</allroles>
+      <audslctrole></audslctrole>
+      <isdeployed>T</isdeployed>
+      <loglevel>ERROR</loglevel>
+      <status>RELEASED</status>
+      <title>Basic Demo API Deployment</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</restlet>

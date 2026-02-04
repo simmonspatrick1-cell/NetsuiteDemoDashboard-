@@ -15,13 +15,22 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-const caches: Record<string, CacheEntry<unknown>> = {
-  unit_types: { data: null, timestamp: 0 },
-  service_items: { data: null, timestamp: 0 },
-  employees: { data: null, timestamp: 0 },
-  projects: { data: null, timestamp: 0 },
-  customers: { data: null, timestamp: 0 },
-};
+// Cache entries keyed by type plus optional qualifiers (e.g., customerId)
+const caches: Record<string, CacheEntry<unknown>> = {};
+
+function cacheKey(base: string, qualifiers?: Record<string, string | number | undefined>) {
+  if (!qualifiers) return base;
+  const parts = Object.entries(qualifiers)
+    .filter(([_, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${k}=${v}`)
+    .sort();
+  return parts.length ? `${base}|${parts.join("&")}` : base;
+}
+
+function jitter(ms: number) {
+  const delta = Math.floor(ms * 0.1); // ±10%
+  return ms + (Math.random() * 2 * delta - delta);
+}
 
 interface UnitType {
   id: string;
@@ -86,8 +95,9 @@ export async function GET(req: Request) {
 
   switch (fieldType) {
     case "unit_types": {
-      const cache = caches.unit_types as CacheEntry<UnitType>;
-      if (!forceRefresh && cache.data && now - cache.timestamp < CACHE_DURATION) {
+      const key = cacheKey('unit_types');
+      const cache = (caches[key] as CacheEntry<UnitType>) || { data: null, timestamp: 0 };
+      if (!forceRefresh && cache.data && now - cache.timestamp < jitter(CACHE_DURATION)) {
         return NextResponse.json({ success: true, data: cache.data, cached: true });
       }
 
@@ -95,7 +105,7 @@ export async function GET(req: Request) {
       if (result.success && result.data) {
         const data = result.data as { unitTypes?: UnitType[] };
         const unitTypes = data.unitTypes || [];
-        caches.unit_types = { data: unitTypes, timestamp: now };
+        caches[key] = { data: unitTypes, timestamp: now } as any;
         return NextResponse.json({ success: true, data: unitTypes, cached: false });
       }
 
@@ -108,8 +118,9 @@ export async function GET(req: Request) {
     }
 
     case "service_items": {
-      const cache = caches.service_items as CacheEntry<ServiceItem>;
-      if (!forceRefresh && cache.data && now - cache.timestamp < CACHE_DURATION) {
+      const key = cacheKey('service_items');
+      const cache = (caches[key] as CacheEntry<ServiceItem>) || { data: null, timestamp: 0 };
+      if (!forceRefresh && cache.data && now - cache.timestamp < jitter(CACHE_DURATION)) {
         return NextResponse.json({ success: true, data: cache.data, cached: true });
       }
 
@@ -117,7 +128,7 @@ export async function GET(req: Request) {
       if (result.success && result.data) {
         const data = result.data as { items?: ServiceItem[] };
         const items = data.items || [];
-        caches.service_items = { data: items, timestamp: now };
+        caches[key] = { data: items, timestamp: now } as any;
         return NextResponse.json({ success: true, data: items, cached: false });
       }
 
@@ -129,8 +140,9 @@ export async function GET(req: Request) {
     }
 
     case "employees": {
-      const cache = caches.employees as CacheEntry<Employee>;
-      if (!forceRefresh && cache.data && now - cache.timestamp < CACHE_DURATION) {
+      const key = cacheKey('employees');
+      const cache = (caches[key] as CacheEntry<Employee>) || { data: null, timestamp: 0 };
+      if (!forceRefresh && cache.data && now - cache.timestamp < jitter(CACHE_DURATION)) {
         return NextResponse.json({ success: true, data: cache.data, cached: true });
       }
 
@@ -138,7 +150,7 @@ export async function GET(req: Request) {
       if (result.success && result.data) {
         const data = result.data as { employees?: Employee[] };
         const employees = data.employees || [];
-        caches.employees = { data: employees, timestamp: now };
+        caches[key] = { data: employees, timestamp: now } as any;
         return NextResponse.json({ success: true, data: employees, cached: false });
       }
 
@@ -150,30 +162,18 @@ export async function GET(req: Request) {
     }
 
     case "projects": {
-      // Projects can be filtered by customerId, so we don't cache when filtered
-      if (customerId) {
-        const result = await getNetSuiteProjects(parseInt(customerId));
-        if (result.success && result.data) {
-          const data = result.data as { projects?: Project[] };
-          return NextResponse.json({ success: true, data: data.projects || [], cached: false });
-        }
-        return NextResponse.json({
-          success: false,
-          data: [],
-          error: result.error || "Failed to fetch projects",
-        });
-      }
-
-      const cache = caches.projects as CacheEntry<Project>;
-      if (!forceRefresh && cache.data && now - cache.timestamp < CACHE_DURATION) {
+      const qualifiers = customerId ? { customerId } : undefined;
+      const key = cacheKey('projects', qualifiers || {});
+      const cache = (caches[key] as CacheEntry<Project>) || { data: null, timestamp: 0 };
+      if (!forceRefresh && cache.data && now - cache.timestamp < jitter(CACHE_DURATION)) {
         return NextResponse.json({ success: true, data: cache.data, cached: true });
       }
 
-      const result = await getNetSuiteProjects();
+      const result = await (customerId ? getNetSuiteProjects(parseInt(customerId)) : getNetSuiteProjects());
       if (result.success && result.data) {
         const data = result.data as { projects?: Project[] };
         const projects = data.projects || [];
-        caches.projects = { data: projects, timestamp: now };
+        caches[key] = { data: projects, timestamp: now } as any;
         return NextResponse.json({ success: true, data: projects, cached: false });
       }
 
@@ -185,8 +185,9 @@ export async function GET(req: Request) {
     }
 
     case "customers": {
-      const cache = caches.customers as CacheEntry<Customer>;
-      if (!forceRefresh && cache.data && now - cache.timestamp < CACHE_DURATION) {
+      const key = cacheKey('customers');
+      const cache = (caches[key] as CacheEntry<Customer>) || { data: null, timestamp: 0 };
+      if (!forceRefresh && cache.data && now - cache.timestamp < jitter(CACHE_DURATION)) {
         return NextResponse.json({ success: true, data: cache.data, cached: true });
       }
 
@@ -194,7 +195,7 @@ export async function GET(req: Request) {
       if (result.success && result.data) {
         const data = result.data as { customers?: Customer[] };
         const customers = data.customers || [];
-        caches.customers = { data: customers, timestamp: now };
+        caches[key] = { data: customers, timestamp: now } as any;
         return NextResponse.json({ success: true, data: customers, cached: false });
       }
 
