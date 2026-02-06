@@ -10,11 +10,85 @@ export function handleDbError(error: any, operation: string) {
 }
 
 export async function initializeDatabase() {
-  // Placeholder for database initialization logic
-  // In a real application, this function might contain code to:
-  // 1. Check if the database exists.
-  // 2. Create the database if it doesn't exist.
-  // 3. Run database migrations.
-  // 4. Seed the database with initial data.
-  console.log("Database initialized (placeholder)")
+  await sql`
+    CREATE TABLE IF NOT EXISTS prospects (
+      id SERIAL PRIMARY KEY,
+      company_name TEXT NOT NULL,
+      website_url TEXT,
+      phone TEXT,
+      email TEXT,
+      subsidiary TEXT,
+      status TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS customers (
+      id SERIAL PRIMARY KEY,
+      company_name TEXT NOT NULL,
+      contact_name TEXT NOT NULL,
+      contact_email TEXT NOT NULL,
+      phone TEXT,
+      subsidiary TEXT,
+      status TEXT,
+      prospect_id INTEGER REFERENCES prospects(id) ON DELETE SET NULL,
+      netsuite_id TEXT,
+      selected BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS service_items (
+      id SERIAL PRIMARY KEY,
+      item_name TEXT NOT NULL,
+      display_name TEXT,
+      item_type TEXT NOT NULL,
+      description TEXT,
+      unit_type TEXT,
+      sales_price NUMERIC,
+      purchase_price NUMERIC,
+      income_account TEXT,
+      expense_account TEXT,
+      tax_schedule TEXT,
+      prospect_id INTEGER REFERENCES prospects(id) ON DELETE SET NULL,
+      netsuite_id TEXT,
+      selected BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS projects (
+      id SERIAL PRIMARY KEY,
+      project_id TEXT,
+      project_name TEXT NOT NULL,
+      customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      subsidiary TEXT,
+      project_status TEXT,
+      project_manager TEXT,
+      scheduling_method TEXT,
+      start_date DATE,
+      calculated_end_date DATE,
+      estimated_end_date DATE,
+      planned_work NUMERIC,
+      percent_complete NUMERIC,
+      risk_level TEXT,
+      netsuite_id TEXT,
+      selected BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      task_name TEXT NOT NULL,
+      project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+      prospect_id INTEGER REFERENCES prospects(id) ON DELETE SET NULL,
+      assigned_role TEXT,
+      estimated_hours NUMERIC,
+      netsuite_id TEXT,
+      selected BOOLEAN DEFAULT false,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `;
+  console.log("Database tables initialized successfully");
 }
