@@ -410,6 +410,7 @@ export async function createTimeEntry(params: {
   date?: string;
   isBillable?: boolean;
   memo?: string;
+  serviceItemId?: number;
 }) {
   return callNetSuiteRestlet("POST", {
     action: "createTimeEntry",
@@ -419,6 +420,7 @@ export async function createTimeEntry(params: {
     date: params.date || new Date().toISOString().split("T")[0],
     isBillable: params.isBillable ?? true,
     memo: params.memo,
+    ...(params.serviceItemId && { serviceItemId: params.serviceItemId }),
   });
 }
 

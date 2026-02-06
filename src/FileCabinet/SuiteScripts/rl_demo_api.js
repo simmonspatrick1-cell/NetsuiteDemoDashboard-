@@ -817,11 +817,11 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     break;
 
                 case 'quickSetup':
-                    response = handleQuickSetup(context);
+                    response = handleQuickSetup(data);
                     break;
 
                 case 'batchCreate':
-                    response = handleBatchCreate(context);
+                    response = handleBatchCreate(data);
                     break;
 
                 default:
@@ -1051,19 +1051,60 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
 
         itemRecord.setValue({ fieldId: 'itemid', value: data.itemName });
 
-        if (data.description) {
-            itemRecord.setValue({ fieldId: 'displayname', value: data.description });
-            itemRecord.setValue({ fieldId: 'salesdescription', value: data.description });
+        // Display name / description
+        var displayName = data.displayName || data.description;
+        if (displayName) {
+            itemRecord.setValue({ fieldId: 'displayname', value: displayName });
+            itemRecord.setValue({ fieldId: 'salesdescription', value: displayName });
         }
 
-        if (data.rate) {
-            itemRecord.selectNewLine({ sublistId: 'price' });
-            itemRecord.setCurrentSublistValue({ sublistId: 'price', fieldId: 'pricelevel', value: 1 });
-            itemRecord.setCurrentSublistValue({ sublistId: 'price', fieldId: 'price_1_', value: data.rate });
-            itemRecord.commitLine({ sublistId: 'price' });
+        // Subsidiary
+        if (data.subsidiary) {
+            itemRecord.setValue({ fieldId: 'subsidiary', value: data.subsidiary });
+        }
+        if (data.includeChildren) {
+            itemRecord.setValue({ fieldId: 'includechildren', value: true });
+        }
+
+        // Tax Schedule (required in this account)
+        if (data.taxSchedule) {
+            itemRecord.setValue({ fieldId: 'taxschedule', value: data.taxSchedule });
+        }
+
+        // Unit type
+        if (data.unitType) {
+            itemRecord.setValue({ fieldId: 'unitstype', value: data.unitType });
+        }
+
+        // Revenue Recognition
+        if (data.revenueRecognitionRule) {
+            itemRecord.setValue({ fieldId: 'revenuerecognitionrule', value: data.revenueRecognitionRule });
+        }
+        if (data.revRecForecastRule) {
+            itemRecord.setValue({ fieldId: 'revrecforecastrule', value: data.revRecForecastRule });
+        }
+        if (data.directRevenuePosting) {
+            itemRecord.setValue({ fieldId: 'directrevenueposting', value: true });
         }
 
         var itemId = itemRecord.save();
+
+        // Set pricing after initial save (sublist not available in dynamic create with subsidiaries)
+        var price = data.salesPrice || data.rate;
+        if (price) {
+            try {
+                var loadedRecord = record.load({ type: record.Type.SERVICE_ITEM, id: itemId, isDynamic: true });
+                var lineCount = loadedRecord.getLineCount({ sublistId: 'price' });
+                if (lineCount > 0) {
+                    loadedRecord.selectLine({ sublistId: 'price', line: 0 });
+                    loadedRecord.setCurrentSublistValue({ sublistId: 'price', fieldId: 'price_1_', value: price });
+                    loadedRecord.commitLine({ sublistId: 'price' });
+                    loadedRecord.save();
+                }
+            } catch (priceErr) {
+                log.error('Set price failed', priceErr);
+            }
+        }
 
         return {
             success: true,
@@ -1346,6 +1387,10 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
             timeEntry.setValue({ fieldId: 'hours', value: hours });
             timeEntry.setValue({ fieldId: 'trandate', value: date ? new Date(date) : new Date() });
             timeEntry.setValue({ fieldId: 'isbillable', value: isBillable !== false });
+
+            if (data.serviceItemId) {
+                timeEntry.setValue({ fieldId: 'item', value: data.serviceItemId });
+            }
 
             if (memo) {
                 timeEntry.setValue({ fieldId: 'memo', value: memo });

@@ -90,5 +90,34 @@ export async function initializeDatabase() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `;
+  // Add columns that may be missing from older table versions
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS selected BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS netsuite_id TEXT`;
+  await sql`ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS selected BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS netsuite_id TEXT`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS display_name TEXT`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS unit_type TEXT`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS sales_price NUMERIC`;
+  await sql`ALTER TABLE service_items ADD COLUMN IF NOT EXISTS purchase_price NUMERIC`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS selected BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS netsuite_id TEXT`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_status TEXT`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_manager TEXT`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_name TEXT`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS customer_id INTEGER`;
+  await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS project_id TEXT`;
+  await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS selected BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS netsuite_id TEXT`;
+
+  // Add UNIQUE constraint on netsuite_id if not present (for ON CONFLICT)
+  // Drop partial indexes first if they exist, then create non-partial ones
+  await sql`DROP INDEX IF EXISTS idx_customers_netsuite_id`;
+  await sql`DROP INDEX IF EXISTS idx_service_items_netsuite_id`;
+  await sql`DROP INDEX IF EXISTS idx_projects_netsuite_id`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_netsuite_id ON customers(netsuite_id)`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_service_items_netsuite_id ON service_items(netsuite_id)`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_netsuite_id ON projects(netsuite_id)`;
+
   console.log("Database tables initialized successfully");
 }

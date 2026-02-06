@@ -5,6 +5,7 @@ import {
   createCustomer,
   createProject,
   createServiceItem,
+  createTimeEntry,
   batchCreate,
   createEstimate,
   createProjectTask,
@@ -14,7 +15,7 @@ import {
 } from "@/lib/netsuite";
 
 interface PushRequest {
-  action?: "quick_setup" | "create_customer" | "create_project" | "create_service_item" | "batch_create" | "push_entity" | "create_estimate" | "create_project_task";
+  action?: "quick_setup" | "create_customer" | "create_project" | "create_service_item" | "create_time_entry" | "batch_create" | "push_entity" | "create_estimate" | "create_project_task";
   entityType?: "service_items" | "customers" | "projects" | "prospects" | "tasks";
   prospectName?: string;
   template?: TemplateType;
@@ -31,6 +32,12 @@ interface PushRequest {
   customerCount?: number;
   projectsPerCustomer?: number;
   daysOfTime?: number;
+  // Time entry fields
+  employeeId?: number;
+  hours?: number;
+  date?: string;
+  isBillable?: boolean;
+  serviceItemId?: number;
   // Estimate fields
   projectId?: number;
   title?: string;
@@ -320,6 +327,27 @@ export async function POST(req: Request) {
           }
         }
         
+        return NextResponse.json(result);
+      }
+
+      case "create_time_entry": {
+        if (!body.employeeId || !body.projectId || !body.hours) {
+          return NextResponse.json(
+            { error: "employeeId, projectId, and hours are required for create_time_entry" },
+            { status: 400 }
+          );
+        }
+
+        const result = await createTimeEntry({
+          employeeId: body.employeeId,
+          projectId: body.projectId,
+          hours: body.hours,
+          date: body.date,
+          isBillable: body.isBillable,
+          memo: body.memo,
+          serviceItemId: body.serviceItemId,
+        });
+
         return NextResponse.json(result);
       }
 
