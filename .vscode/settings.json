@@ -1,4 +1,5 @@
 {
     "suitecloud.developerAssistant.authID": "STAIRWAY_SERVICES",
-    "suitecloud.developerAssistant.disableWelcomeNotification": true
+    "suitecloud.developerAssistant.disableWelcomeNotification": true,
+    "suitecloud.developerAssistant.enable": true
 }
