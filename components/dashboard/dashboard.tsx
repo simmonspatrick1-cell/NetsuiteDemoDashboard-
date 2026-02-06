@@ -6,6 +6,7 @@ import { Sidebar } from "./sidebar";
 import { Overview } from "./overview";
 import { EntityPanel } from "./entity-panel";
 import { NetSuitePanel } from "./netsuite-panel";
+import { toast } from "sonner";
 import type { EntityType, Prospect, Customer, ServiceItem, Project, Task } from "@/lib/demo-types";
 
 interface DashboardData {
@@ -64,7 +65,7 @@ export function Dashboard({ initialData }: { initialData: DashboardData }) {
         throw new Error(result.error || "Failed to push to NetSuite");
       }
 
-      alert(result.message || "Data pushed to NetSuite successfully!");
+      toast.success(result.message || "Data pushed to NetSuite successfully!");
       mutate();
     },
     [mutate]

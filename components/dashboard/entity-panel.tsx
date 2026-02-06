@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "./data-table";
 import { Sparkles, Upload, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import type { EntityType, Prospect, Customer, ServiceItem, Project, Task } from "@/lib/demo-types";
 
 interface EntityPanelProps {
@@ -43,6 +44,9 @@ export function EntityPanel({
     setIsGenerating(true);
     try {
       await onGenerate(count);
+      toast.success(`Generated ${count} ${entityLabels[entityType].toLowerCase()}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to generate data");
     } finally {
       setIsGenerating(false);
     }
@@ -52,6 +56,8 @@ export function EntityPanel({
     setIsPushing(true);
     try {
       await onPushToNetSuite();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to push to NetSuite");
     } finally {
       setIsPushing(false);
     }
@@ -61,6 +67,9 @@ export function EntityPanel({
     setIsClearing(true);
     try {
       await onClearAll();
+      toast.success(`Cleared all ${entityLabels[entityType].toLowerCase()}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to clear data");
     } finally {
       setIsClearing(false);
     }

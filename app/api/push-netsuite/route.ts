@@ -24,6 +24,10 @@ interface PushRequest {
   projectName?: string;
   customerId?: number;
   itemName?: string;
+  displayName?: string;
+  unitType?: string;
+  salesPrice?: number;
+  purchasePrice?: number;
   customerCount?: number;
   projectsPerCustomer?: number;
   daysOfTime?: number;
@@ -299,14 +303,18 @@ export async function POST(req: Request) {
         
         const result = await createServiceItem({
           itemName: body.itemName,
+          displayName: body.displayName,
+          unitType: body.unitType,
+          salesPrice: body.salesPrice,
+          purchasePrice: body.purchasePrice,
         });
-        
+
         if (result.success && result.data) {
           const data = result.data as { data?: { itemId?: number; name?: string } };
           if (data.data?.itemId) {
             await sql`
-              INSERT INTO service_items (item_name, item_type, netsuite_id, selected)
-              VALUES (${body.itemName}, 'Service', ${data.data.itemId.toString()}, false)
+              INSERT INTO service_items (item_name, display_name, item_type, unit_type, sales_price, purchase_price, netsuite_id, selected)
+              VALUES (${body.itemName}, ${body.displayName || null}, 'Service', ${body.unitType || null}, ${body.salesPrice || null}, ${body.purchasePrice || null}, ${data.data.itemId.toString()}, false)
               ON CONFLICT (netsuite_id) DO UPDATE SET item_name = EXCLUDED.item_name
             `;
           }

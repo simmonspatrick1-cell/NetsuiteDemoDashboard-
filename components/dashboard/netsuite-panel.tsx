@@ -117,36 +117,44 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
   const [employees, setEmployees] = useState<NetSuiteEmployee[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
+  const fetchNetSuiteData = async (refresh = false) => {
+    setIsLoadingData(true);
+    try {
+      const qs = refresh ? "&refresh=true" : "";
+      const [customersRes, projectsRes, itemsRes, employeesRes] = await Promise.all([
+        fetch(`/api/netsuite-fields?type=customers${qs}`),
+        fetch(`/api/netsuite-fields?type=projects${qs}`),
+        fetch(`/api/netsuite-fields?type=service_items${qs}`),
+        fetch(`/api/netsuite-fields?type=employees${qs}`),
+      ]);
+
+      const [customersData, projectsData, itemsData, employeesData] = await Promise.all([
+        customersRes.json(),
+        projectsRes.json(),
+        itemsRes.json(),
+        employeesRes.json(),
+      ]);
+
+      if (customersData.success) setCustomers(customersData.data || []);
+      else toast.error("Failed to load customers list");
+      if (projectsData.success) setProjects(projectsData.data || []);
+      else toast.error("Failed to load projects list");
+      if (itemsData.success) setServiceItems(itemsData.data || []);
+      else toast.error("Failed to load service items list");
+      if (employeesData.success) setEmployees(employeesData.data || []);
+      else toast.error("Failed to load employees list");
+    } catch (error) {
+      console.error("Failed to fetch NetSuite data:", error);
+      toast.error("Failed to connect to NetSuite for dropdown data");
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   // Fetch NetSuite data on mount
   useEffect(() => {
-    async function fetchNetSuiteData() {
-      setIsLoadingData(true);
-      try {
-        const [customersRes, projectsRes, itemsRes, employeesRes] = await Promise.all([
-          fetch("/api/netsuite-fields?type=customers"),
-          fetch("/api/netsuite-fields?type=projects"),
-          fetch("/api/netsuite-fields?type=service_items"),
-          fetch("/api/netsuite-fields?type=employees"),
-        ]);
-
-        const [customersData, projectsData, itemsData, employeesData] = await Promise.all([
-          customersRes.json(),
-          projectsRes.json(),
-          itemsRes.json(),
-          employeesRes.json(),
-        ]);
-
-        if (customersData.success) setCustomers(customersData.data || []);
-        if (projectsData.success) setProjects(projectsData.data || []);
-        if (itemsData.success) setServiceItems(itemsData.data || []);
-        if (employeesData.success) setEmployees(employeesData.data || []);
-      } catch (error) {
-        console.error("Failed to fetch NetSuite data:", error);
-      } finally {
-        setIsLoadingData(false);
-      }
-    }
     fetchNetSuiteData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleQuickSetup = async () => {
@@ -172,6 +180,7 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
       if (result.success) {
         toast.success(`Created customer and ${result.data?.projects?.length || 3} projects for ${prospectName}`);
         setProspectName("");
+        fetchNetSuiteData(true);
         onSuccess?.();
       } else {
         toast.error(result.error || "Failed to create demo data");
@@ -207,6 +216,9 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
       if (result.success) {
         toast.success(`Created customer: ${customerName}`);
         setCustomerName("");
+        setCustomerEmail("");
+        setCustomerPhone("");
+        fetchNetSuiteData(true);
         onSuccess?.();
       } else {
         toast.error(result.error || "Failed to create customer");
@@ -223,7 +235,12 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
       toast.error("Please enter project name and NetSuite customer ID");
       return;
     }
-    
+    const parsedCustomerId = parseInt(customerId, 10);
+    if (isNaN(parsedCustomerId)) {
+      toast.error("Customer ID must be a valid number");
+      return;
+    }
+
     setIsCreatingProject(true);
     try {
       const response = await fetch("/api/push-netsuite", {
@@ -232,7 +249,7 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
         body: JSON.stringify({
           action: "create_project",
           projectName,
-          customerId: parseInt(customerId),
+          customerId: parsedCustomerId,
         }),
       });
       
@@ -241,6 +258,8 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
       if (result.success) {
         toast.success(`Created project: ${projectName}`);
         setProjectName("");
+        setCustomerId("");
+        fetchNetSuiteData(true);
         onSuccess?.();
       } else {
         toast.error(result.error || "Failed to create project");
@@ -282,10 +301,7 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
         setServiceItemUnitType("");
         setServiceItemSalesPrice("");
         setServiceItemPurchasePrice("");
-        // Refresh service items list
-        const itemsRes = await fetch("/api/netsuite-fields?type=service_items&refresh=true");
-        const itemsData = await itemsRes.json();
-        if (itemsData.success) setServiceItems(itemsData.data || []);
+        fetchNetSuiteData(true);
         onSuccess?.();
       } else {
         toast.error(result.error || "Failed to create service item");
@@ -437,6 +453,12 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
   };
 
   const handleBatchCreate = async () => {
+    const parsedBatchCount = parseInt(batchCount, 10);
+    if (isNaN(parsedBatchCount) || parsedBatchCount < 1) {
+      toast.error("Please enter a valid number of customers");
+      return;
+    }
+
     setIsBatchCreating(true);
     try {
       const response = await fetch("/api/push-netsuite", {
@@ -444,7 +466,7 @@ export function NetSuitePanel({ onSuccess }: { onSuccess?: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "batch_create",
-          customerCount: parseInt(batchCount),
+          customerCount: parsedBatchCount,
           template: batchTemplate,
           projectsPerCustomer: 3,
           daysOfTime: 30,

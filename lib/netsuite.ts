@@ -374,15 +374,22 @@ export async function createProject(params: {
 
 export async function createServiceItem(params: {
   itemName: string;
+  displayName?: string;
+  unitType?: string;
+  salesPrice?: number;
+  purchasePrice?: number;
 }) {
   // Add random 4-digit suffix to avoid duplicates in NetSuite
   const suffix = Math.floor(1000 + Math.random() * 9000);
   const uniqueItemName = `${params.itemName} - ${suffix}`;
-  
+
   return callNetSuiteRestlet("POST", {
     action: "createServiceItem",
     itemName: uniqueItemName,
-    displayName: uniqueItemName,
+    displayName: params.displayName || uniqueItemName,
+    ...(params.unitType && { unitType: params.unitType }),
+    ...(params.salesPrice != null && { salesPrice: params.salesPrice }),
+    ...(params.purchasePrice != null && { purchasePrice: params.purchasePrice }),
     // Hardcoded fields using internal IDs
     taxSchedule: 2, // Internal ID for S2 - Non Taxable
     subsidiary: 1, // Internal ID for Parent (Holding Co.)
