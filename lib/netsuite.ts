@@ -185,7 +185,7 @@ export async function callNetSuiteRestlet(
     };
 
     // Simple retry/backoff for transient errors (429/5xx) and a timeout
-    const REQUEST_TIMEOUT_MS = 15000;
+    const REQUEST_TIMEOUT_MS = 30000;
     const MAX_RETRIES = 2;
 
     const doFetch = async (): Promise<Response> => {
@@ -243,7 +243,8 @@ export async function callNetSuiteRestlet(
 
     // If the RESTlet returns a JSON with { success: false }, reflect that in our wrapper
     const bodySuccess = data && typeof data === 'object' && 'success' in data ? Boolean((data as any).success) : true;
-    return { success: bodySuccess, data };
+    const bodyError = !bodySuccess && data?.error ? String(data.error) : undefined;
+    return { success: bodySuccess, data, error: bodyError };
   } catch (error) {
     return {
       success: false,

@@ -533,7 +533,7 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
             var filters = [['isinactive', 'is', 'F']];
             if (customerId) {
                 filters.push('AND');
-                filters.push(['parent', 'anyof', customerId]);
+                filters.push(['customer', 'anyof', customerId]);
             }
 
             var projSearch = search.create({
@@ -543,7 +543,7 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     search.createColumn({ name: 'internalid' }),
                     search.createColumn({ name: 'entityid' }),
                     search.createColumn({ name: 'companyname' }),
-                    search.createColumn({ name: 'parent' }),
+                    search.createColumn({ name: 'customer' }),
                     search.createColumn({ name: 'entitystatus' }),
                     search.createColumn({ name: 'startdate' }),
                     search.createColumn({ name: 'projectedenddate' })
@@ -555,8 +555,8 @@ define(['N/record', 'N/search', 'N/query', 'N/log', 'N/format'], function(record
                     id: result.getValue({ name: 'internalid' }),
                     projectId: result.getValue({ name: 'entityid' }),
                     projectName: result.getValue({ name: 'companyname' }),
-                    customerId: result.getValue({ name: 'parent' }),
-                    customerName: result.getText({ name: 'parent' }),
+                    customerId: result.getValue({ name: 'customer' }),
+                    customerName: result.getText({ name: 'customer' }),
                     status: result.getText({ name: 'entitystatus' }),
                     startDate: result.getValue({ name: 'startdate' }),
                     endDate: result.getValue({ name: 'projectedenddate' })
